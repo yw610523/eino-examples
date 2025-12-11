@@ -7,18 +7,28 @@ import (
 	"log"
 	"os"
 
-	"github.com/cloudwego/eino-ext/components/model/ark"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/schema"
 	"github.com/joho/godotenv"
 )
 
+var (
+	SfApiKey  string
+	SfBaseUrl string
+	SfModelId string
+)
+
 func init() {
-	err := godotenv.Load(".env")
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file, err: %v", err)
+		log.Fatal("Error loading .env file")
 		return
 	}
+	SfApiKey = os.Getenv("SF_API_KEY")
+	SfBaseUrl = os.Getenv("SF_BASE_URL")
+	SfModelId = os.Getenv("SF_MODEL_ID")
 }
 
 func createTemplage() prompt.ChatTemplate {
@@ -43,24 +53,8 @@ func createMessagesFromTemplate() []*schema.Message {
 func main() {
 	ctx := context.Background()
 	messages := createMessagesFromTemplate()
-	chatModel := createArtCharModel(ctx)
+	chatModel := createSiliconFlowChatModel(ctx)
 	stream(ctx, chatModel, messages)
-}
-
-func createArtCharModel(ctx context.Context) *ark.ChatModel {
-	arkApiKey := os.Getenv("ARK_API_KEY")
-	arkModelID := os.Getenv("ARK_MODEL_ID")
-	if arkApiKey == "" || arkModelID == "" {
-		log.Fatal("请补充火山引擎的系统环境变量: ARK_API_KEY或ARK_MODEL_ID")
-	}
-	chatModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
-		APIKey: arkApiKey,
-		Model:  arkModelID,
-	})
-	if err != nil {
-		log.Fatalf("创建火山大模型失败: %v", err)
-	}
-	return chatModel
 }
 
 func reportStream(sr *schema.StreamReader[*schema.Message]) {
@@ -78,10 +72,22 @@ func reportStream(sr *schema.StreamReader[*schema.Message]) {
 		i++
 	}
 }
-func stream(ctx context.Context, chatModel *ark.ChatModel, messages []*schema.Message) {
+func stream(ctx context.Context, chatModel model.BaseChatModel, messages []*schema.Message) {
 	response, err := chatModel.Stream(ctx, messages)
 	if err != nil {
 		panic(err)
 	}
 	reportStream(response)
+}
+
+func createSiliconFlowChatModel(ctx context.Context) *openai.ChatModel {
+	sfModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:  SfApiKey,
+		BaseURL: SfBaseUrl,
+		Model:   SfModelId,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return sfModel
 }
